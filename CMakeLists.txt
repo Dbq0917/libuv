@@ -593,6 +593,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-fs-event.c
        test/test-fs-poll.c
        test/test-fs.c
+       test/test-fs-loop-latency.c
        test/test-fs-readdir.c
        test/test-fs-fd-hash.c
        test/test-fs-open-flags.c

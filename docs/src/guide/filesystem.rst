@@ -23,6 +23,13 @@ callback is null. The return value of functions is a :ref:`libuv error code
 The *asynchronous* form is called when a callback is passed and the return
 value is 0.
 
+.. warning::
+
+    Passing a null callback runs the filesystem operation on the calling
+    thread. Never use the synchronous form from an event loop callback, or
+    from any function called by one. A single slow read, write or close can
+    stall every timer and socket handled by that loop.
+
 Reading/Writing files
 ---------------------
 
@@ -56,7 +63,7 @@ a callback for when the file is opened:
 .. literalinclude:: ../../code/uvcat/main.c
     :language: c
     :linenos:
-    :lines: 41-53
+    :lines: 66-81
     :emphasize-lines: 4, 6-7
 
 The ``result`` field of a ``uv_fs_t`` is the file descriptor in case of the
@@ -66,8 +73,8 @@ The ``result`` field of a ``uv_fs_t`` is the file descriptor in case of the
 .. literalinclude:: ../../code/uvcat/main.c
     :language: c
     :linenos:
-    :lines: 26-39
-    :emphasize-lines: 2,8,12
+    :lines: 47-64
+    :emphasize-lines: 4-5,15-16
 
 In the case of a read call, you should pass an *initialized* buffer which will
 be filled with data before the read callback is triggered. The ``uv_fs_*``
@@ -75,12 +82,12 @@ operations map almost directly to certain POSIX functions, so EOF is indicated
 in this case by ``result`` being 0. In the case of streams or pipes, the
 ``UV_EOF`` constant would have been passed as a status instead.
 
-Here you see a common pattern when writing asynchronous programs. The
-``uv_fs_close()`` call is performed synchronously. *Usually tasks which are
-one-off, or are done as part of the startup or shutdown stage are performed
-synchronously, since we are interested in fast I/O when the program is going
-about its primary task and dealing with multiple I/O sources*. For solo tasks
-the performance difference usually is negligible and may lead to simpler code.
+The read callback drives the next operation; at EOF it calls ``close_source()``,
+which submits ``uv_fs_close()`` with a callback. Closing asynchronously matters
+for the same reason as reading and writing: an otherwise one-off filesystem
+call can still block the loop. The chain keeps exactly one request in flight on
+the same descriptor, so completions stay ordered without duplicating the
+descriptor or creating another event loop handle.
 
 Filesystem writing is similarly simple using ``uv_fs_write()``.  *Your callback
 will be triggered after the write is complete*.  In our case the callback
@@ -91,8 +98,8 @@ callbacks.
 .. literalinclude:: ../../code/uvcat/main.c
     :language: c
     :linenos:
-    :lines: 17-24
-    :emphasize-lines: 6
+    :lines: 35-45
+    :emphasize-lines: 3,4-5,8-9
 
 .. warning::
 
@@ -105,7 +112,7 @@ We set the dominos rolling in ``main()``:
 .. literalinclude:: ../../code/uvcat/main.c
     :language: c
     :linenos:
-    :lines: 55-
+    :lines: 83-97
     :emphasize-lines: 2
 
 .. warning::
